@@ -1,7 +1,6 @@
 /**
  * ESP8266 API + Firebase + Status (STABLE)
  */
-
 //% color="#AA278D" weight=100 icon="\uf1eb"
 namespace esp8266http {
 
