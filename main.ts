@@ -4,7 +4,6 @@
 
 //% color="#AA278D" weight=100 icon="\uf1eb"
 namespace esp8266http {
-
     let firebaseHost = ""
     let firebaseAuth = ""
     let lastResponse = ""
