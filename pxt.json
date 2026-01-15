@@ -1,0 +1,11 @@
+{
+  "name": "esp8266-microbit-api",
+  "version": "0.0.1",
+  "description": "ESP8266 WiFi + HTTP API + Firebase",
+  "dependencies": {
+    "core": "*"
+  },
+  "files": [
+    "main.ts"
+  ]
+}
