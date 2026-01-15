@@ -1,9 +1,10 @@
 /**
- * ESP8266 API + Firebase + Status Indicator
+ * ESP8266 API + Firebase + Status (STABLE)
  */
 
 //% color="#AA278D" weight=100 icon="\uf1eb"
 namespace esp8266http {
+
     let firebaseHost = ""
     let firebaseAuth = ""
     let lastResponse = ""
@@ -31,7 +32,9 @@ namespace esp8266http {
     }
 
     function isOK(resp: string): boolean {
-        return resp.indexOf("OK") >= 0 || resp.indexOf("SEND OK") >= 0
+        return resp.indexOf("OK") >= 0 ||
+               resp.indexOf("SEND OK") >= 0 ||
+               resp.indexOf("200 OK") >= 0
     }
 
     //% block="ESP8266 send AT %cmd wait %ms ms"
@@ -47,16 +50,19 @@ namespace esp8266http {
 
     //% block="ESP8266 connect WiFi ssid %ssid password %password"
     export function connectWiFi(ssid: string, password: string): boolean {
-        let ok1 = sendAT("AT+CWMODE=1", 1000)
-        let ok2 = sendAT(
+        let ok = true
+        ok = sendAT("AT", 500) && ok
+        ok = sendAT("AT+CWMODE=1", 1000) && ok
+        ok = sendAT("AT+CIPMUX=0", 500) && ok
+        ok = sendAT(
             "AT+CWJAP=\"" + ssid + "\",\"" + password + "\"",
-            8000
-        )
-        return ok1 && ok2
+            10000
+        ) && ok
+        return ok
     }
 
     // =====================
-    // HTTP API
+    // HTTP API (GET)
     // =====================
 
     //% block="ESP8266 HTTP GET host %host path %path"
@@ -64,7 +70,7 @@ namespace esp8266http {
 
         if (!sendAT(
             "AT+CIPSTART=\"TCP\",\"" + host + "\",80",
-            2000
+            3000
         )) return false
 
         let req =
@@ -73,7 +79,9 @@ namespace esp8266http {
             "Connection: close\r\n\r\n"
 
         if (!sendAT("AT+CIPSEND=" + req.length, 1000)) return false
-        return sendAT(req, 3000)
+        let ok = sendAT(req, 4000)
+        sendAT("AT+CIPCLOSE", 500)
+        return ok
     }
 
     // =====================
@@ -93,7 +101,7 @@ namespace esp8266http {
 
         if (!sendAT(
             "AT+CIPSTART=\"TCP\",\"" + firebaseHost + "\",80",
-            2000
+            3000
         )) return false
 
         let req =
@@ -104,7 +112,9 @@ namespace esp8266http {
             body
 
         if (!sendAT("AT+CIPSEND=" + req.length, 1000)) return false
-        return sendAT(req, 4000)
+        let ok = sendAT(req, 5000)
+        sendAT("AT+CIPCLOSE", 500)
+        return ok
     }
 
     // =====================
