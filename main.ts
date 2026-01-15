@@ -104,7 +104,7 @@ namespace esp8266http {
         )) return false
 
         let req =
-            "PUT /" + path + ".json?auth=" + firebaseAuth + " HTTP/1.1\r\n" +
+            "PUT /" + path + ".json HTTP/1.1\r\n" +
             "Host: " + firebaseHost + "\r\n" +
             "Content-Type: application/json\r\n" +
             "Content-Length: " + body.length + "\r\n\r\n" +
