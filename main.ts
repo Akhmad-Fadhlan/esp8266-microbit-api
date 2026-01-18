@@ -1,6 +1,6 @@
 /**
  * ESP8266 + Micro:bit → Server Lokal → Firebase
- * Full stable code
+ * Stable version
  */
 //% color="#AA278D" weight=100 icon="\uf1eb"
 namespace esp8266http {
@@ -14,7 +14,8 @@ namespace esp8266http {
     //% block="ESP8266 init TX %tx RX %rx baud %baud"
     export function init(tx: SerialPin, rx: SerialPin, baud: BaudRate) {
         serial.redirect(tx, rx, baud)
-        serial.setRxBufferSize(512) // buffer lebih besar
+        serial.setTxBufferSize(128)
+        serial.setRxBufferSize(512) // buffer lebih besar untuk respon
         basic.pause(2000)
         music.playTone(523, music.beat(BeatFraction.Quarter))
     }
@@ -23,6 +24,7 @@ namespace esp8266http {
     // SEND AT COMMAND
     // =====================
     export function sendAT(cmd: string, timeout: number): boolean {
+        serial.readString() // flush
         serial.writeString(cmd + "\r\n")
         let start = input.runningTime()
         let resp = ""
@@ -43,8 +45,9 @@ namespace esp8266http {
     export function connectWiFi(ssid: string, password: string): boolean {
         let ok = true
         ok = sendAT("AT", 500) && ok
+        ok = sendAT("ATE0", 500) && ok       // matikan echo
         ok = sendAT("AT+CWMODE=1", 1000) && ok
-        ok = sendAT("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"", 12000) && ok
+        ok = sendAT("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"", 20000) && ok
         if (ok) music.playTone(988, music.beat(BeatFraction.Quarter))
         else music.playTone(262, music.beat(BeatFraction.Half))
         return ok
@@ -56,28 +59,28 @@ namespace esp8266http {
     //% blockId=esp8266_http_get
     //% block="HTTP GET host %host path %path"
     export function httpGet(host: string, path: string): boolean {
-        // connect TCP
+        // Connect TCP
         if (!sendAT("AT+CIPSTART=\"TCP\",\"" + host + "\",80", 5000)) {
             music.playTone(262, music.beat(BeatFraction.Half))
             return false
         }
 
-        // buat request HTTP GET
+        // Buat request HTTP GET
         let req = "GET " + path + " HTTP/1.1\r\n" +
                   "Host: " + host + "\r\n" +
                   "Connection: close\r\n\r\n"
 
-        // kirim panjang data
+        // Kirim panjang data
         if (!sendAT("AT+CIPSEND=" + req.length, 2000)) {
             music.playTone(262, music.beat(BeatFraction.Half))
             sendAT("AT+CIPCLOSE", 500)
             return false
         }
 
-        // kirim request
-        let ok = sendAT(req, 4000)
+        // Kirim request
+        let ok = sendAT(req, 5000)
 
-        // close connection
+        // Close connection
         sendAT("AT+CIPCLOSE", 500)
 
         if (ok) music.playTone(988, music.beat(BeatFraction.Quarter))
