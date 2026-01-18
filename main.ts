@@ -1,5 +1,5 @@
 /**
- * ESP8266 API + Firebase + Status (STABLE)
+ * ESP8266 API + Firebase + Sound Status (STABLE)
  */
 //% color="#AA278D" weight=100 icon="\uf1eb"
 namespace esp8266http {
@@ -17,6 +17,9 @@ namespace esp8266http {
         serial.redirect(tx, rx, baud)
         serial.setRxBufferSize(256)
         basic.pause(2000)
+
+        // ready tone
+        music.playTone(523, music.beat(BeatFraction.Quarter))
     }
 
     function readResponse(ms: number): string {
@@ -44,24 +47,44 @@ namespace esp8266http {
     }
 
     // =====================
+    // SOUND STATUS
+    // =====================
+
+    //% block="ESP8266 success tone"
+    export function successTone() {
+        music.playTone(988, music.beat(BeatFraction.Quarter))
+        music.playTone(1319, music.beat(BeatFraction.Quarter))
+    }
+
+    //% block="ESP8266 error tone"
+    export function errorTone() {
+        music.playTone(262, music.beat(BeatFraction.Half))
+    }
+
+    // =====================
     // WIFI
     // =====================
 
     //% block="ESP8266 connect WiFi ssid %ssid password %password"
     export function connectWiFi(ssid: string, password: string): boolean {
         let ok = true
+
         ok = sendAT("AT", 500) && ok
         ok = sendAT("AT+CWMODE=1", 1000) && ok
         ok = sendAT("AT+CIPMUX=0", 500) && ok
         ok = sendAT(
             "AT+CWJAP=\"" + ssid + "\",\"" + password + "\"",
-            10000
+            12000
         ) && ok
+
+        if (ok) successTone()
+        else errorTone()
+
         return ok
     }
 
     // =====================
-    // HTTP API (GET)
+    // HTTP GET
     // =====================
 
     //% block="ESP8266 HTTP GET host %host path %path"
@@ -70,16 +93,27 @@ namespace esp8266http {
         if (!sendAT(
             "AT+CIPSTART=\"TCP\",\"" + host + "\",80",
             3000
-        )) return false
+        )) {
+            errorTone()
+            return false
+        }
 
         let req =
             "GET " + path + " HTTP/1.1\r\n" +
             "Host: " + host + "\r\n" +
             "Connection: close\r\n\r\n"
 
-        if (!sendAT("AT+CIPSEND=" + req.length, 1000)) return false
+        if (!sendAT("AT+CIPSEND=" + req.length, 1000)) {
+            errorTone()
+            return false
+        }
+
         let ok = sendAT(req, 4000)
         sendAT("AT+CIPCLOSE", 500)
+
+        if (ok) successTone()
+        else errorTone()
+
         return ok
     }
 
@@ -101,7 +135,10 @@ namespace esp8266http {
         if (!sendAT(
             "AT+CIPSTART=\"TCP\",\"" + firebaseHost + "\",80",
             3000
-        )) return false
+        )) {
+            errorTone()
+            return false
+        }
 
         let req =
             "PUT /" + path + ".json HTTP/1.1\r\n" +
@@ -110,9 +147,17 @@ namespace esp8266http {
             "Content-Length: " + body.length + "\r\n\r\n" +
             body
 
-        if (!sendAT("AT+CIPSEND=" + req.length, 1000)) return false
+        if (!sendAT("AT+CIPSEND=" + req.length, 1000)) {
+            errorTone()
+            return false
+        }
+
         let ok = sendAT(req, 5000)
         sendAT("AT+CIPCLOSE", 500)
+
+        if (ok) successTone()
+        else errorTone()
+
         return ok
     }
 
