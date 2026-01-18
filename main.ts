@@ -12,16 +12,21 @@ namespace esp8266http {
     // BASIC
     // =====================
 
+    //% blockId=esp8266_init
     //% block="ESP8266 init TX %tx RX %rx baud %baud"
+    //% tx.shadow=serial_pin
+    //% rx.shadow=serial_pin
+    //% baud.shadow=baudrate
+    //% group="Basic"
+    //% blockGap=8
     export function init(tx: SerialPin, rx: SerialPin, baud: BaudRate) {
         serial.redirect(tx, rx, baud)
         serial.setRxBufferSize(256)
         basic.pause(2000)
-
-        // ready tone
         music.playTone(523, music.beat(BeatFraction.Quarter))
     }
 
+    // ===== INTERNAL (NO BLOCK) =====
     function readResponse(ms: number): string {
         let t = input.runningTime()
         let resp = ""
@@ -39,7 +44,16 @@ namespace esp8266http {
                resp.indexOf("200 OK") >= 0
     }
 
+    // =====================
+    // AT COMMAND
+    // =====================
+
+    //% blockId=esp8266_send_at
     //% block="ESP8266 send AT %cmd wait %ms ms"
+    //% cmd.shadow=text
+    //% ms.shadow=number
+    //% group="AT Command"
+    //% blockGap=8
     export function sendAT(cmd: string, ms: number): boolean {
         serial.writeString(cmd + "\r\n")
         let resp = readResponse(ms)
@@ -50,13 +64,18 @@ namespace esp8266http {
     // SOUND STATUS
     // =====================
 
+    //% blockId=esp8266_success_tone
     //% block="ESP8266 success tone"
+    //% group="Sound"
     export function successTone() {
         music.playTone(988, music.beat(BeatFraction.Quarter))
         music.playTone(1319, music.beat(BeatFraction.Quarter))
     }
 
+    //% blockId=esp8266_error_tone
     //% block="ESP8266 error tone"
+    //% group="Sound"
+    //% blockGap=8
     export function errorTone() {
         music.playTone(262, music.beat(BeatFraction.Half))
     }
@@ -65,7 +84,12 @@ namespace esp8266http {
     // WIFI
     // =====================
 
+    //% blockId=esp8266_connect_wifi
     //% block="ESP8266 connect WiFi ssid %ssid password %password"
+    //% ssid.shadow=text
+    //% password.shadow=text
+    //% group="WiFi"
+    //% blockGap=8
     export function connectWiFi(ssid: string, password: string): boolean {
         let ok = true
 
@@ -84,16 +108,18 @@ namespace esp8266http {
     }
 
     // =====================
-    // HTTP GET
+    // HTTP
     // =====================
 
+    //% blockId=esp8266_http_get
     //% block="ESP8266 HTTP GET host %host path %path"
+    //% host.shadow=text
+    //% path.shadow=text
+    //% group="HTTP"
+    //% blockGap=8
     export function httpGet(host: string, path: string): boolean {
 
-        if (!sendAT(
-            "AT+CIPSTART=\"TCP\",\"" + host + "\",80",
-            3000
-        )) {
+        if (!sendAT(`AT+CIPSTART="TCP","${host}",80`, 3000)) {
             errorTone()
             return false
         }
@@ -121,21 +147,27 @@ namespace esp8266http {
     // FIREBASE
     // =====================
 
+    //% blockId=esp8266_firebase_config
     //% block="Firebase config host %host auth %auth"
+    //% host.shadow=text
+    //% auth.shadow=text
+    //% group="Firebase"
+    //% blockGap=8
     export function firebaseConfig(host: string, auth: string) {
         firebaseHost = host
         firebaseAuth = auth
     }
 
+    //% blockId=esp8266_firebase_set
     //% block="Firebase set path %path value %value"
+    //% path.shadow=text
+    //% value.shadow=text
+    //% group="Firebase"
     export function firebaseSet(path: string, value: string): boolean {
 
         let body = JSON.stringify(value)
 
-        if (!sendAT(
-            "AT+CIPSTART=\"TCP\",\"" + firebaseHost + "\",80",
-            3000
-        )) {
+        if (!sendAT(`AT+CIPSTART="TCP","${firebaseHost}",80`, 3000)) {
             errorTone()
             return false
         }
@@ -165,7 +197,9 @@ namespace esp8266http {
     // STATUS
     // =====================
 
+    //% blockId=esp8266_last_status
     //% block="ESP8266 last response"
+    //% group="Debug"
     export function lastStatus(): string {
         return lastResponse
     }
