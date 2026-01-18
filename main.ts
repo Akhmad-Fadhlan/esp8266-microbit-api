@@ -12,17 +12,30 @@ namespace esp8266http {
     // BASIC
     // =====================
 
+    //% blockId=esp8266_init
     //% block="ESP8266 init TX %tx RX %rx baud %baud"
+    //% tx.shadow=serial_pin
+    //% rx.shadow=serial_pin
+    //% baud.shadow=baudrate
+    //% blockGap=8
     export function init(tx: SerialPin, rx: SerialPin, baud: BaudRate) {
         serial.redirect(tx, rx, baud)
         serial.setRxBufferSize(256)
         basic.pause(2000)
-
-        // ready tone
         music.playTone(523, music.beat(BeatFraction.Quarter))
     }
 
-    function readResponse(ms: number): string {
+    // =====================
+    // AT COMMAND
+    // =====================
+
+    //% blockId=esp8266_sendAT
+    //% block="ESP8266 send AT %cmd wait %ms ms"
+    //% cmd.shadow=text
+    //% ms.shadow=number
+    //% blockGap=8
+    export function sendAT(cmd: string, ms: number): boolean {
+        serial.writeString(cmd + "\r\n")
         let t = input.runningTime()
         let resp = ""
         while (input.runningTime() - t < ms) {
@@ -30,33 +43,26 @@ namespace esp8266http {
             basic.pause(10)
         }
         lastResponse = resp
-        return resp
-    }
-
-    function isOK(resp: string): boolean {
         return resp.indexOf("OK") >= 0 ||
                resp.indexOf("SEND OK") >= 0 ||
                resp.indexOf("200 OK") >= 0
-    }
-
-    //% block="ESP8266 send AT %cmd wait %ms ms"
-    export function sendAT(cmd: string, ms: number): boolean {
-        serial.writeString(cmd + "\r\n")
-        let resp = readResponse(ms)
-        return isOK(resp)
     }
 
     // =====================
     // SOUND STATUS
     // =====================
 
+    //% blockId=esp8266_success_tone
     //% block="ESP8266 success tone"
+    //% blockGap=8
     export function successTone() {
         music.playTone(988, music.beat(BeatFraction.Quarter))
         music.playTone(1319, music.beat(BeatFraction.Quarter))
     }
 
+    //% blockId=esp8266_error_tone
     //% block="ESP8266 error tone"
+    //% blockGap=8
     export function errorTone() {
         music.playTone(262, music.beat(BeatFraction.Half))
     }
@@ -65,17 +71,17 @@ namespace esp8266http {
     // WIFI
     // =====================
 
+    //% blockId=esp8266_connect_wifi
     //% block="ESP8266 connect WiFi ssid %ssid password %password"
+    //% ssid.shadow=text
+    //% password.shadow=text
+    //% blockGap=8
     export function connectWiFi(ssid: string, password: string): boolean {
         let ok = true
-
         ok = sendAT("AT", 500) && ok
         ok = sendAT("AT+CWMODE=1", 1000) && ok
         ok = sendAT("AT+CIPMUX=0", 500) && ok
-        ok = sendAT(
-            "AT+CWJAP=\"" + ssid + "\",\"" + password + "\"",
-            12000
-        ) && ok
+        ok = sendAT("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"", 12000) && ok
 
         if (ok) successTone()
         else errorTone()
@@ -87,21 +93,20 @@ namespace esp8266http {
     // HTTP GET
     // =====================
 
+    //% blockId=esp8266_http_get
     //% block="ESP8266 HTTP GET host %host path %path"
+    //% host.shadow=text
+    //% path.shadow=text
+    //% blockGap=8
     export function httpGet(host: string, path: string): boolean {
-
-        if (!sendAT(
-            "AT+CIPSTART=\"TCP\",\"" + host + "\",80",
-            3000
-        )) {
+        if (!sendAT("AT+CIPSTART=\"TCP\",\"" + host + "\",80", 3000)) {
             errorTone()
             return false
         }
 
-        let req =
-            "GET " + path + " HTTP/1.1\r\n" +
-            "Host: " + host + "\r\n" +
-            "Connection: close\r\n\r\n"
+        let req = "GET " + path + " HTTP/1.1\r\n" +
+                  "Host: " + host + "\r\n" +
+                  "Connection: close\r\n\r\n"
 
         if (!sendAT("AT+CIPSEND=" + req.length, 1000)) {
             errorTone()
@@ -121,31 +126,34 @@ namespace esp8266http {
     // FIREBASE
     // =====================
 
+    //% blockId=esp8266_firebase_config
     //% block="Firebase config host %host auth %auth"
+    //% host.shadow=text
+    //% auth.shadow=text
+    //% blockGap=8
     export function firebaseConfig(host: string, auth: string) {
         firebaseHost = host
         firebaseAuth = auth
     }
 
+    //% blockId=esp8266_firebase_set
     //% block="Firebase set path %path value %value"
+    //% path.shadow=text
+    //% value.shadow=text
+    //% blockGap=8
     export function firebaseSet(path: string, value: string): boolean {
-
         let body = JSON.stringify(value)
 
-        if (!sendAT(
-            "AT+CIPSTART=\"TCP\",\"" + firebaseHost + "\",80",
-            3000
-        )) {
+        if (!sendAT("AT+CIPSTART=\"TCP\",\"" + firebaseHost + "\",80", 3000)) {
             errorTone()
             return false
         }
 
-        let req =
-            "PUT /" + path + ".json HTTP/1.1\r\n" +
-            "Host: " + firebaseHost + "\r\n" +
-            "Content-Type: application/json\r\n" +
-            "Content-Length: " + body.length + "\r\n\r\n" +
-            body
+        let req = "PUT /" + path + ".json HTTP/1.1\r\n" +
+                  "Host: " + firebaseHost + "\r\n" +
+                  "Content-Type: application/json\r\n" +
+                  "Content-Length: " + body.length + "\r\n\r\n" +
+                  body
 
         if (!sendAT("AT+CIPSEND=" + req.length, 1000)) {
             errorTone()
@@ -165,7 +173,9 @@ namespace esp8266http {
     // STATUS
     // =====================
 
+    //% blockId=esp8266_last_response
     //% block="ESP8266 last response"
+    //% blockGap=8
     export function lastStatus(): string {
         return lastResponse
     }
