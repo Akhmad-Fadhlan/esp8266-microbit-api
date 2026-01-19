@@ -1,33 +1,17 @@
 /*******************************************************************************
  * MakeCode extension for ESP8266 Wifi module.
- *
- * Company: Cytron Technologies Sdn Bhd
- * Website: http://www.cytron.io
- * Email: support@cytron.io
- *******************************************************************************/
-
-/**
- * Blocks for ESP8266 WiFi module.
  */
 
 //% weight=10 color=#ff8000 icon="\uf1eb" block="ESP8266 WiFi"
 namespace esp8266 {
-    // Flags
     let esp8266Initialized = false
     let wifiConnected = false
-    
-    // Buffer for data received from UART.
     let rxData = ""
-    
-    // Store WiFi credentials
-    let wifiSSID = ""
-    let wifiPassword = ""
     
     /**
      * Send AT command and wait for response.
      */
     //% blockHidden=true
-    //% blockId=esp8266_send_command
     export function sendCommand(command: string, expected_response: string = null, timeout: number = 100): boolean {
         basic.pause(10)
         rxData = ""
@@ -35,15 +19,12 @@ namespace esp8266 {
         
         serial.writeString(command + "\r\n")
         
-        if (expected_response == null) {
-            return true
-        }
+        if (expected_response == null) return true
         
         let result = false
         let timestamp = input.runningTime()
         while (true) {
             if (input.runningTime() - timestamp > timeout) {
-                result = false
                 break
             }
             
@@ -56,7 +37,6 @@ namespace esp8266 {
                 
                 if (expected_response == "OK") {
                     if (rxData.slice(0, rxData.indexOf("\r\n")).includes("ERROR")) {
-                        result = false
                         break
                     }
                 }
@@ -82,25 +62,12 @@ namespace esp8266 {
         esp8266Initialized = false
         wifiConnected = false
         
-        // Reset ESP
-        if (!sendCommand("AT+RST", "ready", 5000)) {
-            basic.showIcon(IconNames.Sad)
-            return
-        }
-        
+        // Reset and initialize
+        if (!sendCommand("AT+RST", "ready", 5000)) return
         basic.pause(2000)
         
-        // Turn off echo
-        if (!sendCommand("ATE0", "OK")) {
-            basic.showIcon(IconNames.Sad)
-            return
-        }
-        
-        // Set WiFi mode to station
-        if (!sendCommand("AT+CWMODE=1", "OK")) {
-            basic.showIcon(IconNames.Sad)
-            return
-        }
+        if (!sendCommand("ATE0", "OK")) return
+        if (!sendCommand("AT+CWMODE=1", "OK")) return
         
         esp8266Initialized = true
         basic.showIcon(IconNames.Happy)
@@ -116,12 +83,8 @@ namespace esp8266 {
     export function connectWiFi(ssid: string, password: string) {
         if (!esp8266Initialized) return false
         
-        wifiSSID = ssid
-        wifiPassword = password
-        
         basic.showString("C")
         
-        // Connect to WiFi
         if (sendCommand("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"", "OK", 15000)) {
             wifiConnected = true
             basic.showIcon(IconNames.Yes)
@@ -134,53 +97,26 @@ namespace esp8266 {
     }
     
     /**
-     * Check WiFi connection status
+     * Check if WiFi is connected.
      */
     //% weight=28
     //% blockGap=8
     //% blockId=esp8266_is_wifi_connected
     //% block="WiFi connected"
     export function isWifiConnected(): boolean {
-        if (!esp8266Initialized) return false
-        
-        sendCommand("AT+CIPSTATUS")
-        let status = ""
-        let timestamp = input.runningTime()
-        
-        while (input.runningTime() - timestamp < 2000) {
-            rxData += serial.readString()
-            if (rxData.includes("STATUS:")) {
-                let start = rxData.indexOf("STATUS:")
-                let end = rxData.indexOf("\r\n", start)
-                if (end > start) {
-                    status = rxData.slice(start, end)
-                }
-                break
-            }
-        }
-        
-        // Clear buffer
-        rxData = ""
-        
-        if (status.includes("STATUS:3") || status.includes("STATUS:4")) {
-            wifiConnected = true
-            return true
-        } else {
-            wifiConnected = false
-            return false
-        }
+        return wifiConnected
     }
     
     /**
-     * SIMPLE FUNCTION: Send data to server
+     * SIMPLE FUNCTION: Send data to server (ALL IN ONE)
      */
     //% weight=26
     //% blockGap=40
-    //% block="kirim ke server|IP: %serverIp|WiFi: %ssid|Password: %password|Data: %data"
+    //% block="kirim data|IP: %serverIp|WiFi: %ssid|Password: %password|Data: %data"
     //% serverIp.defl="10.155.187.242"
     //% ssid.defl="honor"
     //% password.defl="12345678"
-    export function kirimKeServer(serverIp: string, ssid: string, password: string, data: string) {
+    export function kirimData(serverIp: string, ssid: string, password: string, data: string) {
         if (!esp8266Initialized) {
             basic.showIcon(IconNames.Sad)
             return
@@ -196,15 +132,7 @@ namespace esp8266 {
             basic.pause(2000)
         }
         
-        // Step 2: Check WiFi connection
-        basic.showString("C")
-        if (!isWifiConnected()) {
-            basic.showIcon(IconNames.No)
-            return
-        }
-        basic.pause(1000)
-        
-        // Step 3: Connect to server
+        // Step 2: Connect to server
         basic.showString("S")
         if (!sendCommand("AT+CIPSTART=\"TCP\",\"" + serverIp + "\",80", "OK", 5000)) {
             basic.showIcon(IconNames.No)
@@ -212,7 +140,7 @@ namespace esp8266 {
         }
         basic.pause(1000)
         
-        // Step 4: Send HTTP GET request
+        // Step 3: Send HTTP GET request
         basic.showString("D")
         let httpRequest = "GET /tes.php?" + data + " HTTP/1.1\r\n" +
                          "Host: " + serverIp + "\r\n" +
@@ -228,23 +156,23 @@ namespace esp8266 {
         serial.writeString(httpRequest)
         basic.pause(1000)
         
-        // Step 5: Close connection
+        // Step 4: Close connection
         sendCommand("AT+CIPCLOSE", "OK", 1000)
         
         basic.showIcon(IconNames.Happy)
     }
     
     /**
-     * Send sensor data
+     * Send sensor data (simplified)
      */
     //% weight=25
     //% blockGap=8
-    //% block="kirim data sensor|IP: %serverIp|WiFi: %ssid|Password: %password|Suhu: %suhu|Kelembaban: %kelembaban"
+    //% block="kirim sensor|IP: %serverIp|WiFi: %ssid|Password: %password|Suhu: %suhu"
     //% serverIp.defl="10.155.187.242"
     //% ssid.defl="honor"
     //% password.defl="12345678"
-    export function kirimDataSensor(serverIp: string, ssid: string, password: string, suhu: number, kelembaban: number) {
-        let data = "suhu=" + suhu + "&kelembaban=" + kelembaban
-        kirimKeServer(serverIp, ssid, password, data)
+    export function kirimSensor(serverIp: string, ssid: string, password: string, suhu: number) {
+        let data = "suhu=" + suhu
+        kirimData(serverIp, ssid, password, data)
     }
 }
