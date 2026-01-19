@@ -1,24 +1,18 @@
 {
-    "name": "pxt-esp8266-simple",
-    "version": "2.0.0",
-    "description": "MakeCode Package for ESP8266 WiFi Module",
-    "license": "MIT",
-    "dependencies": {
-        "core": "*",
-        "radio": "*",
-        "microphone": "*"
-    },
-    "files": [
-        "README.md",
-        "main.ts"
-    ],
-    "public": true,
-    "targetVersions": {
-        "target": "5.0.12",
-        "targetId": "microbit"
-    },
-    "supportedTargets": [
-        "microbit"
-    ],
-    "preferredEditor": "blocksprj"
+  "name": "pxt-esp8266-simple",
+  "version": "1.0.0",
+  "description": "Simple ESP8266 WiFi + HTTP GET extension for micro:bit",
+  "license": "MIT",
+  "dependencies": {
+    "core": "*"
+  },
+  "files": [
+    "main.ts",
+    "README.md"
+  ],
+  "public": true,
+  "preferredEditor": "blocksprj",
+  "supportedTargets": [
+    "microbit"
+  ]
 }
