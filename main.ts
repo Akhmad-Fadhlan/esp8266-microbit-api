@@ -1,172 +1,108 @@
-/*******************************************************************************
- * MakeCode extension for ESP8266 Wifi module.
- *
- * Modified for simple HTTP GET usage
- *******************************************************************************/
-
 //% weight=10 color=#ff8000 icon="\uf1eb" block="ESP8266 WiFi"
 namespace esp8266 {
 
     let esp8266Initialized = false
     let rxData = ""
 
-    // =========================
-    // LOW LEVEL FUNCTIONS
-    // =========================
-
-    //% blockHidden=true
-    export function sendCommand(command: string, expected_response: string = null, timeout: number = 100): boolean {
+    // Internal function: send AT command and wait for response
+    function sendCommand(command: string, expected_response: string = null, timeout: number = 1000): boolean {
         basic.pause(10)
         serial.readString()
         rxData = ""
         serial.writeString(command + "\r\n")
-
-        if (expected_response == null) return true
-
-        let timestamp = input.runningTime()
+        if (!expected_response) return true
+        let result = false
+        let start = input.runningTime()
         while (true) {
-            if (input.runningTime() - timestamp > timeout) return false
-
+            if (input.runningTime() - start > timeout) {
+                result = false
+                break
+            }
             rxData += serial.readString()
             if (rxData.includes("\r\n")) {
                 let line = rxData.slice(0, rxData.indexOf("\r\n"))
-
-                if (line.includes(expected_response)) return true
-                if (expected_response == "OK" && line.includes("ERROR")) return false
-
+                if (line.includes(expected_response)) {
+                    result = true
+                    break
+                }
+                if (expected_response == "OK" && line.includes("ERROR")) {
+                    result = false
+                    break
+                }
                 rxData = rxData.slice(rxData.indexOf("\r\n") + 2)
             }
         }
+        return result
     }
 
-    //% blockHidden=true
-    export function getResponse(response: string, timeout: number = 100): string {
-        let timestamp = input.runningTime()
-        while (true) {
-            if (input.runningTime() - timestamp > timeout) return ""
-
-            rxData += serial.readString()
-            if (rxData.includes("\r\n")) {
-                let line = rxData.slice(0, rxData.indexOf("\r\n"))
-                rxData = rxData.slice(rxData.indexOf("\r\n") + 2)
-
-                if (line.includes(response)) return line
-            }
-        }
-    }
-
-    //% blockHidden=true
-    export function formatUrl(url: string): string {
-        url = url.replaceAll("%", "%25")
+    // Internal: format URL parameters
+    function formatUrl(url: string): string {
         url = url.replaceAll(" ", "%20")
-        url = url.replaceAll("?", "%3F")
         url = url.replaceAll("=", "%3D")
         url = url.replaceAll("&", "%26")
+        url = url.replaceAll("?", "%3F")
         return url
     }
 
-    // =========================
-    // BASIC BLOCKS
-    // =========================
-
-    //% weight=30
-    //% block="ESP8266 initialized"
-    export function isESP8266Initialized(): boolean {
-        return esp8266Initialized
-    }
-
-    //% weight=29
-    //% block="initialize ESP8266 Tx %tx Rx %rx Baudrate %baudrate"
+    // Initialize ESP8266
+    //% blockId=esp8266_init
+    //% block="init ESP8266: Tx %tx Rx %rx Baudrate %baudrate"
     export function init(tx: SerialPin, rx: SerialPin, baudrate: BaudRate) {
         serial.redirect(tx, rx, baudrate)
         serial.setTxBufferSize(128)
         serial.setRxBufferSize(128)
-
         esp8266Initialized = false
-
         if (!sendCommand("AT+RESTORE", "ready", 5000)) return
         if (!sendCommand("ATE0", "OK")) return
-
         esp8266Initialized = true
     }
 
-    //% weight=28
-    //% block="WiFi connected"
-    export function isWifiConnected(): boolean {
-        sendCommand("AT+CIPSTATUS")
-        let status = getResponse("STATUS:", 1000)
-        getResponse("OK")
-        return !(status == "" || status.includes("STATUS:5"))
-    }
-
-    //% weight=27
-    //% block="connect WiFi SSID %ssid Password %password"
-    export function connectWiFi(ssid: string, password: string) {
+    // Connect to WiFi
+    function connectWiFi(ssid: string, password: string) {
         sendCommand("AT+CWMODE=1", "OK")
         sendCommand("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"", "OK", 20000)
     }
 
-    // =========================
-    // SIMPLIFIED FUNCTIONS
-    // =========================
-
+    // ---------------------------
+    // NEW: SUPER SIMPLE FUNCTION
+    // ---------------------------
     /**
-     * Initialize ESP8266 and connect to WiFi (one block)
+     * Send data to server (automatic init, WiFi, TCP, HTTP GET)
+     * @param ip Server IP
+     * @param ssid WiFi SSID
+     * @param password WiFi password
+     * @param phpFile File PHP (example: tes.php)
+     * @param params URL parameters (example: suhu=30)
      */
-    //% weight=26
-    //% block="ESP8266 begin Tx %tx Rx %rx Baud %baudrate WiFi %ssid Password %password"
-    export function begin(
-        tx: SerialPin,
-        rx: SerialPin,
-        baudrate: BaudRate,
-        ssid: string,
-        password: string
-    ) {
-        init(tx, rx, baudrate)
-        basic.pause(1000)
-        connectWiFi(ssid, password)
-        basic.pause(3000)
-    }
-
-    /**
-     * Simple HTTP GET
-     */
-    //% weight=25
-    //% block="HTTP GET IP %ip Path %path Params %params"
-    export function httpGet(ip: string, path: string, params: string) {
-
-        let url = path
-        if (params != "") {
-            url = path + "?" + formatUrl(params)
+    //% blockId=esp8266_send_to_server
+    //% block="send to server IP %ip WiFi %ssid Password %password File %phpFile Data %params"
+    export function sendToServer(ip: string, ssid: string, password: string, phpFile: string, params: string) {
+        // 1. Init if not initialized
+        if (!esp8266Initialized) {
+            init(SerialPin.P16, SerialPin.P15, BaudRate.BaudRate115200)
+            basic.pause(1000)
         }
 
-        if (!sendCommand(
-            "AT+CIPSTART=\"TCP\",\"" + ip + "\",80",
-            "OK",
-            5000
-        )) return
+        // 2. Connect WiFi
+        connectWiFi(ssid, password)
+        basic.pause(3000)
 
+        // 3. Build HTTP GET
+        let url = phpFile
+        if (params != "") url += "?" + formatUrl(params)
         let request =
-            "GET " + url + " HTTP/1.1\r\n" +
+            "GET /" + url + " HTTP/1.1\r\n" +
             "Host: " + ip + "\r\n" +
             "Connection: close\r\n\r\n"
 
-        if (!sendCommand(
-            "AT+CIPSEND=" + request.length,
-            ">",
-            3000
-        )) return
+        // 4. Open TCP
+        if (!sendCommand("AT+CIPSTART=\"TCP\",\"" + ip + "\",80", "OK", 5000)) return
 
+        // 5. Send data length
+        if (!sendCommand("AT+CIPSEND=" + request.length, ">", 3000)) return
+
+        // 6. Send HTTP GET request
         serial.writeString(request)
     }
 
-    /**
-     * Ultra simple data sender
-     * (default path: /tes.php)
-     */
-    //% weight=24
-    //% block="send data to IP %ip Data %data"
-    export function sendData(ip: string, data: string) {
-        httpGet(ip, "/tes.php", data)
-    }
 }
