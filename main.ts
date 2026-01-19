@@ -151,7 +151,7 @@ namespace esp8266 {
         url = url.replaceAll("]", "%5D")
         url = url.replaceAll("^", "%5E")
         url = url.replaceAll("_", "%5F")
-        url = url.replaceAll("", "%60")
+        url = url.replaceAll("`", "%60")  // PERBAIKAN: mengganti string kosong dengan backtick
         url = url.replaceAll("{", "%7B")
         url = url.replaceAll("|", "%7C")
         url = url.replaceAll("}", "%7D")
