@@ -14,6 +14,7 @@
 namespace esp8266 {
     // Flag to indicate whether the ESP8266 was initialized successfully.
     let esp8266Initialized = false
+    let wifiConnected = false
     
     // Buffer for data received from UART.
     let rxData = ""
@@ -31,9 +32,9 @@ namespace esp8266 {
         // Wait a while from previous command.
         basic.pause(10)
         
-        // Flush the Rx buffer.
-        serial.readString()
+        // Clear the Rx buffer.
         rxData = ""
+        serial.readString()
         
         // Send the command and end with "\r\n".
         serial.writeString(command + "\r\n")
@@ -123,40 +124,23 @@ namespace esp8266 {
     //% blockHidden=true
     //% blockId=esp8266_format_url
     export function formatUrl(url: string): string {
-        url = url.replaceAll("%", "%25")
-        url = url.replaceAll(" ", "%20")
-        url = url.replaceAll("!", "%21")
-        url = url.replaceAll("\"", "%22")
-        url = url.replaceAll("#", "%23")
-        url = url.replaceAll("$", "%24")
-        url = url.replaceAll("&", "%26")
-        url = url.replaceAll("'", "%27")
-        url = url.replaceAll("(", "%28")
-        url = url.replaceAll(")", "%29")
-        url = url.replaceAll("*", "%2A")
-        url = url.replaceAll("+", "%2B")
-        url = url.replaceAll(",", "%2C")
-        url = url.replaceAll("-", "%2D")
-        url = url.replaceAll(".", "%2E")
-        url = url.replaceAll("/", "%2F")
-        url = url.replaceAll(":", "%3A")
-        url = url.replaceAll(";", "%3B")
-        url = url.replaceAll("<", "%3C")
-        url = url.replaceAll("=", "%3D")
-        url = url.replaceAll(">", "%3E")
-        url = url.replaceAll("?", "%3F")
-        url = url.replaceAll("@", "%40")
-        url = url.replaceAll("[", "%5B")
-        url = url.replaceAll("\\", "%5C")
-        url = url.replaceAll("]", "%5D")
-        url = url.replaceAll("^", "%5E")
-        url = url.replaceAll("_", "%5F")
-        url = url.replaceAll("`", "%60")  // PERBAIKAN: mengganti string kosong dengan backtick
-        url = url.replaceAll("{", "%7B")
-        url = url.replaceAll("|", "%7C")
-        url = url.replaceAll("}", "%7D")
-        url = url.replaceAll("~", "%7E")
-        return url
+        // Hanya encode karakter yang penting
+        let encodedUrl = ""
+        for (let i = 0; i < url.length; i++) {
+            let char = url.charAt(i)
+            if (char == " ") {
+                encodedUrl += "%20"
+            } else if (char == "&") {
+                encodedUrl += "%26"
+            } else if (char == "=") {
+                encodedUrl += "%3D"
+            } else if (char == "?") {
+                encodedUrl += "%3F"
+            } else {
+                encodedUrl += char
+            }
+        }
+        return encodedUrl
     }
     
     /**
@@ -188,16 +172,25 @@ namespace esp8266 {
         
         // Reset the flag.
         esp8266Initialized = false
+        wifiConnected = false
         
-        // Restore the ESP8266 factory settings.
-        if (sendCommand("AT+RESTORE", "ready", 5000) == false) return
+        // Reset ESP8266 (lebih cepat dari RESTORE)
+        if (sendCommand("AT+RST", "ready", 3000) == false) {
+            basic.showIcon(IconNames.Sad)
+            return
+        }
+        
+        basic.pause(2000)
         
         // Turn off echo.
-        if (sendCommand("ATE0", "OK") == false) return
+        if (sendCommand("ATE0", "OK") == false) {
+            basic.showIcon(IconNames.Sad)
+            return
+        }
         
         // Initialized successfully.
-        // Set the flag.
         esp8266Initialized = true
+        basic.showIcon(IconNames.Happy)
     }
     
     /**
@@ -208,16 +201,20 @@ namespace esp8266 {
     //% blockId=esp8266_is_wifi_connected
     //% block="WiFi connected"
     export function isWifiConnected(): boolean {
+        if (!esp8266Initialized) return false
+        
         // Get the connection status.
         sendCommand("AT+CIPSTATUS")
-        let status = getResponse("STATUS:", 1000)
+        let status = getResponse("STATUS:", 2000)
         // Wait until OK is received.
         getResponse("OK")
         
         // Return the WiFi status.
-        if ((status == "") || status.includes("STATUS:5")) {
+        if ((status == "") || status.includes("STATUS:5") || status.includes("STATUS:2")) {
+            wifiConnected = false
             return false
         } else {
+            wifiConnected = true
             return true
         }
     }
@@ -232,27 +229,29 @@ namespace esp8266 {
     //% blockId=esp8266_connect_wifi
     //% block="connect to WiFi: SSID %ssid Password %password"
     export function connectWiFi(ssid: string, password: string) {
+        if (!esp8266Initialized) return
+        
         // Set to station mode.
         sendCommand("AT+CWMODE=1", "OK")
         
         // Connect to WiFi router.
-        sendCommand("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"", "OK", 20000)
+        if (sendCommand("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"", "OK", 15000)) {
+            wifiConnected = true
+            basic.showIcon(IconNames.Yes)
+        } else {
+            wifiConnected = false
+            basic.showIcon(IconNames.No)
+        }
     }
     
     /**
-     * ================================================
-     * BLOK BARU: Fungsi Sederhana untuk Pengiriman Data
-     * ================================================
-     */
-    
-    /**
-     * Kirim data ke server dengan cara sederhana (semua dalam satu)
+     * Kirim data ke server dengan cara sederhana
      * @param serverIp Alamat IP server
      * @param port Port server
      * @param ssid Nama WiFi SSID
      * @param password Password WiFi
      * @param endpoint Endpoint/alamat API
-     * @param data Data yang akan dikirim (format: param1=value1&param2=value2)
+     * @param data Data yang akan dikirim
      */
     //% weight=26
     //% blockGap=8
@@ -260,122 +259,38 @@ namespace esp8266 {
     //% port.defl=80
     //% endpoint.defl="/tes.php"
     export function kirimDataServer(serverIp: string, port: number, ssid: string, password: string, endpoint: string, data: string) {
-        // Tunggu sedikit sebelum memulai
-        basic.pause(100)
-        
-        // 1. Connect ke WiFi
-        basic.showString("C")
-        connectWiFi(ssid, password)
-        basic.pause(5000)
-        
-        // 2. Cek koneksi WiFi
-        basic.showString("W")
-        if (!isWifiConnected()) {
-            basic.showIcon(IconNames.No)
+        if (!esp8266Initialized) {
+            basic.showIcon(IconNames.Sad)
             return
         }
         
-        // 3. Buka koneksi TCP ke server
+        basic.showString("W")
+        
+        // Cek apakah sudah connect WiFi
+        if (!wifiConnected) {
+            // Connect ke WiFi
+            connectWiFi(ssid, password)
+            basic.pause(3000)
+            
+            if (!wifiConnected) {
+                basic.showIcon(IconNames.No)
+                return
+            }
+        }
+        
+        // Tunggu sedikit
+        basic.pause(1000)
         basic.showString("S")
+        
+        // Buka koneksi TCP ke server
         if (!sendCommand("AT+CIPSTART=\"TCP\",\"" + serverIp + "\"," + port, "OK", 5000)) {
             basic.showIcon(IconNames.No)
             return
         }
         
-        // 4. Format URL dengan data
-        let fullEndpoint = endpoint
-        if (data != "") {
-            if (!endpoint.includes("?")) {
-                fullEndpoint += "?"
-            } else {
-                fullEndpoint += "&"
-            }
-            fullEndpoint += data
-        }
-        
-        // Encode URL khusus
-        fullEndpoint = formatUrl(fullEndpoint)
-        
-        // 5. Buat request HTTP GET
-        let httpRequest = "GET " + fullEndpoint + " HTTP/1.1\r\n" +
-            "Host: " + serverIp + "\r\n" +
-            "Connection: close\r\n\r\n"
-        
-        // 6. Kirim panjang data
-        basic.showString("K")
-        if (!sendCommand("AT+CIPSEND=" + httpRequest.length, ">", 3000)) {
-            basic.showIcon(IconNames.No)
-            return
-        }
-        
-        // 7. Kirim HTTP request
-        serial.writeString(httpRequest)
-        
-        // 8. Tunggu sebentar dan tutup koneksi
         basic.pause(1000)
-        sendCommand("AT+CIPCLOSE", "OK", 1000)
+        basic.showString("D")
         
-        basic.showIcon(IconNames.Yes)
-    }
-    
-    /**
-     * Kirim data ke server (versi lebih sederhana, endpoint tetap)
-     * @param serverIp Alamat IP server
-     * @param ssid Nama WiFi SSID
-     * @param password Password WiFi
-     * @param data Data yang akan dikirim (format: param1=value1&param2=value2)
-     */
-    //% weight=25
-    //% blockGap=40
-    //% block="kirim data ke|IP: %serverIp|WiFi: %ssid|password: %password|data: %data"
-    //% serverIp.defl="10.155.187.242"
-    //% ssid.defl="honor"
-    //% password.defl="12345678"
-    export function kirimData(serverIp: string, ssid: string, password: string, data: string) {
-        // Gunakan fungsi utama dengan default values
-        kirimDataServer(serverIp, 80, ssid, password, "/tes.php", data)
-    }
-    
-    /**
-     * Kirim data sensor ke server (format khusus untuk sensor)
-     * @param serverIp Alamat IP server
-     * @param ssid Nama WiFi SSID
-     * @param password Password WiFi
-     * @param suhu Nilai suhu
-     * @param kelembaban Nilai kelembaban
-     * @param tekanan Nilai tekanan (opsional)
-     */
-    //% weight=24
-    //% blockGap=8
-    //% block="kirim data sensor ke|IP: %serverIp|WiFi: %ssid|password: %password|suhu: %suhu|kelembaban: %kelembaban|tekanan: %tekanan"
-    //% tekanan.defl=0
-    //% serverIp.defl="10.155.187.242"
-    //% ssid.defl="honor"
-    //% password.defl="12345678"
-    export function kirimDataSensor(serverIp: string, ssid: string, password: string, suhu: number, kelembaban: number, tekanan: number) {
-        // Format data untuk sensor
-        let data = "suhu=" + suhu + "&kelembaban=" + kelembaban
-        if (tekanan > 0) {
-            data += "&tekanan=" + tekanan
-        }
-        
-        // Kirim data menggunakan fungsi utama
-        kirimDataServer(serverIp, 80, ssid, password, "/tes.php", data)
-    }
-    
-    /**
-     * Versi original untuk backward compatibility
-     * Kirim HTTP GET dengan parameter lengkap
-     * @param serverIp Server IP address
-     * @param port Server port number
-     * @param endpoint API endpoint path
-     * @param data Data to send as query parameters
-     */
-    //% weight=23
-    //% blockGap=8
-    //% block="HTTP GET ke %serverIp port %port endpoint %endpoint data %data"
-    //% blockHidden=false  // Tetap tampil untuk pengguna advanced
-    export function httpGet(serverIp: string, port: number, endpoint: string, data: string) {
         // Format URL dengan data
         let fullEndpoint = endpoint
         if (data != "") {
@@ -387,25 +302,66 @@ namespace esp8266 {
             fullEndpoint += data
         }
         
-        // Encode URL
-        fullEndpoint = formatUrl(fullEndpoint)
-        
-        // Open TCP connection to server
-        sendCommand("AT+CIPSTART=\"TCP\",\"" + serverIp + "\"," + port, "OK", 5000)
-        
-        // Create HTTP GET request
+        // Buat request HTTP GET
         let httpRequest = "GET " + fullEndpoint + " HTTP/1.1\r\n" +
             "Host: " + serverIp + "\r\n" +
             "Connection: close\r\n\r\n"
         
-        // Send data length
-        sendCommand("AT+CIPSEND=" + httpRequest.length, ">", 3000)
+        // Kirim panjang data
+        if (!sendCommand("AT+CIPSEND=" + httpRequest.length, ">", 3000)) {
+            basic.showIcon(IconNames.No)
+            sendCommand("AT+CIPCLOSE", "OK", 1000)
+            return
+        }
         
-        // Send HTTP request
+        // Kirim HTTP request
         serial.writeString(httpRequest)
-        
-        // Close connection
         basic.pause(1000)
+        
+        // Tunggu sebentar dan tutup koneksi
         sendCommand("AT+CIPCLOSE", "OK", 1000)
+        
+        basic.showIcon(IconNames.Yes)
+    }
+    
+    /**
+     * Kirim data ke server (versi lebih sederhana)
+     * @param serverIp Alamat IP server
+     * @param ssid Nama WiFi SSID
+     * @param password Password WiFi
+     * @param data Data yang akan dikirim
+     */
+    //% weight=25
+    //% blockGap=40
+    //% block="kirim data ke|IP: %serverIp|WiFi: %ssid|password: %password|data: %data"
+    //% serverIp.defl="10.155.187.242"
+    //% ssid.defl="honor"
+    //% password.defl="12345678"
+    export function kirimData(serverIp: string, ssid: string, password: string, data: string) {
+        kirimDataServer(serverIp, 80, ssid, password, "/tes.php", data)
+    }
+    
+    /**
+     * Kirim data sensor ke server
+     * @param serverIp Alamat IP server
+     * @param ssid Nama WiFi SSID
+     * @param password Password WiFi
+     * @param suhu Nilai suhu
+     * @param kelembaban Nilai kelembaban
+     * @param tekanan Nilai tekanan
+     */
+    //% weight=24
+    //% blockGap=8
+    //% block="kirim data sensor ke|IP: %serverIp|WiFi: %ssid|password: %password|suhu: %suhu|kelembaban: %kelembaban|tekanan: %tekanan"
+    //% tekanan.defl=0
+    //% serverIp.defl="10.155.187.242"
+    //% ssid.defl="honor"
+    //% password.defl="12345678"
+    export function kirimDataSensor(serverIp: string, ssid: string, password: string, suhu: number, kelembaban: number, tekanan: number) {
+        let data = "suhu=" + suhu + "&kelembaban=" + kelembaban
+        if (tekanan > 0) {
+            data += "&tekanan=" + tekanan
+        }
+        kirimData(serverIp, ssid, password, data)
     }
 }
