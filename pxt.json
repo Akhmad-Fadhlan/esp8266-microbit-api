@@ -10,11 +10,7 @@
     },
     "files": [
         "README.md",
-        "main.ts",
-        "blynk.ts",
-    ],
-    "testFiles": [
-        "test.ts"
+        "main.ts"
     ],
     "public": true,
     "targetVersions": {
