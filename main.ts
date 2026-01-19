@@ -5,7 +5,6 @@
 //% weight=10 color=#ff8000 icon="\uf1eb" block="ESP8266 WiFi"
 namespace esp8266 {
     let esp8266Initialized = false
-    let wifiConnected = false
     let rxData = ""
     
     /**
@@ -60,9 +59,8 @@ namespace esp8266 {
         serial.setRxBufferSize(128)
         
         esp8266Initialized = false
-        wifiConnected = false
         
-        // Reset and initialize
+        // Reset
         if (!sendCommand("AT+RST", "ready", 5000)) return
         basic.pause(2000)
         
@@ -70,109 +68,57 @@ namespace esp8266 {
         if (!sendCommand("AT+CWMODE=1", "OK")) return
         
         esp8266Initialized = true
-        basic.showIcon(IconNames.Happy)
     }
     
     /**
-     * Connect to WiFi router.
-     */
-    //% weight=27
-    //% blockGap=8
-    //% blockId=esp8266_connect_wifi
-    //% block="connect to WiFi: SSID %ssid Password %password"
-    export function connectWiFi(ssid: string, password: string) {
-        if (!esp8266Initialized) return false
-        
-        basic.showString("C")
-        
-        if (sendCommand("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"", "OK", 15000)) {
-            wifiConnected = true
-            basic.showIcon(IconNames.Yes)
-            return true
-        } else {
-            wifiConnected = false
-            basic.showIcon(IconNames.No)
-            return false
-        }
-    }
-    
-    /**
-     * Check if WiFi is connected.
-     */
-    //% weight=28
-    //% blockGap=8
-    //% blockId=esp8266_is_wifi_connected
-    //% block="WiFi connected"
-    export function isWifiConnected(): boolean {
-        return wifiConnected
-    }
-    
-    /**
-     * SIMPLE FUNCTION: Send data to server (ALL IN ONE)
+     * SUPER SIMPLE: Send data to server in ONE BLOCK
      */
     //% weight=26
     //% blockGap=40
-    //% block="kirim data|IP: %serverIp|WiFi: %ssid|Password: %password|Data: %data"
+    //% block="send to server|IP: %serverIp|WiFi: %ssid|Password: %password|Data: %data"
     //% serverIp.defl="10.155.187.242"
     //% ssid.defl="honor"
     //% password.defl="12345678"
-    export function kirimData(serverIp: string, ssid: string, password: string, data: string) {
-        if (!esp8266Initialized) {
-            basic.showIcon(IconNames.Sad)
-            return
-        }
+    export function sendToServer(serverIp: string, ssid: string, password: string, data: string) {
+        if (!esp8266Initialized) return
         
-        // Step 1: Connect WiFi if not connected
-        if (!wifiConnected) {
-            basic.showString("W")
-            if (!connectWiFi(ssid, password)) {
-                basic.showIcon(IconNames.No)
-                return
-            }
-            basic.pause(2000)
-        }
+        basic.showString("W")
         
-        // Step 2: Connect to server
+        // 1. Connect to WiFi
+        sendCommand("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"", "OK", 15000)
+        basic.pause(3000)
+        
         basic.showString("S")
-        if (!sendCommand("AT+CIPSTART=\"TCP\",\"" + serverIp + "\",80", "OK", 5000)) {
-            basic.showIcon(IconNames.No)
-            return
-        }
+        
+        // 2. Connect to server
+        sendCommand("AT+CIPSTART=\"TCP\",\"" + serverIp + "\",80", "OK", 5000)
         basic.pause(1000)
         
-        // Step 3: Send HTTP GET request
         basic.showString("D")
+        
+        // 3. Prepare and send HTTP GET request
         let httpRequest = "GET /tes.php?" + data + " HTTP/1.1\r\n" +
                          "Host: " + serverIp + "\r\n" +
                          "Connection: close\r\n\r\n"
         
-        if (!sendCommand("AT+CIPSEND=" + httpRequest.length, ">", 3000)) {
-            basic.showIcon(IconNames.No)
-            sendCommand("AT+CIPCLOSE")
-            return
-        }
-        
-        // Send the actual HTTP request
+        sendCommand("AT+CIPSEND=" + httpRequest.length, ">", 3000)
         serial.writeString(httpRequest)
         basic.pause(1000)
         
-        // Step 4: Close connection
-        sendCommand("AT+CIPCLOSE", "OK", 1000)
+        // 4. Close connection
+        sendCommand("AT+CIPCLOSE")
         
-        basic.showIcon(IconNames.Happy)
+        basic.showIcon(IconNames.Yes)
     }
-
+    
     /**
-     * Send sensor data (simplified)
+     * Even SIMPLER: Send sensor data
      */
     //% weight=25
     //% blockGap=8
-    //% block="kirim sensor|IP: %serverIp|WiFi: %ssid|Password: %password|Suhu: %suhu"
+    //% block="send sensor|Suhu: %suhu|to IP: %serverIp"
     //% serverIp.defl="10.155.187.242"
-    //% ssid.defl="honor"
-    //% password.defl="12345678"
-    export function kirimSensor(serverIp: string, ssid: string, password: string, suhu: number) {
-        let data = "suhu=" + suhu
-        kirimData(serverIp, ssid, password, data)
+    export function sendSensor(suhu: number, serverIp: string) {
+        sendToServer(serverIp, "honor", "12345678", "suhu=" + suhu)
     }
 }
