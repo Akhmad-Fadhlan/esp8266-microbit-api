@@ -161,7 +161,7 @@ namespace esp8266 {
         
         basic.showIcon(IconNames.Happy)
     }
-    
+
     /**
      * Send sensor data (simplified)
      */
