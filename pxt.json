@@ -1,12 +1,28 @@
 {
-  "name": "esp8266http",
-  "version": "0.0.1",
-  "description": "ESP8266 WiFi HTTP Firebase",
-  "dependencies": {
-    "core": "*"
-  },
-  "files": [
-    "main.ts"
-  ],
-  "public": true
+    "name": "pxt-esp8266",
+    "version": "2.0.0",
+    "description": "MakeCode Package for ESP8266 WiFi Module",
+    "license": "MIT",
+    "dependencies": {
+        "core": "*",
+        "radio": "*",
+        "microphone": "*"
+    },
+    "files": [
+        "README.md",
+        "main.ts",
+        "blynk.ts",
+    ],
+    "testFiles": [
+        "test.ts"
+    ],
+    "public": true,
+    "targetVersions": {
+        "target": "5.0.12",
+        "targetId": "microbit"
+    },
+    "supportedTargets": [
+        "microbit"
+    ],
+    "preferredEditor": "tsprj"
 }
