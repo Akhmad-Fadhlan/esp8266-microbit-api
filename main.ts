@@ -1,8 +1,9 @@
 /*******************************************************************************
  * MakeCode extension for ESP8266 Wifi module.
  *
- * Company: IDN
- * Email: fadhlanakhmad@idn.sch.id
+ * Company: Cytron Technologies Sdn Bhd
+ * Website: http://www.cytron.io
+ * Email: support@cytron.io
  *******************************************************************************/
 
 /**
@@ -239,21 +240,145 @@ namespace esp8266 {
     }
     
     /**
-     * Send HTTP GET request with simplified parameters
+     * ================================================
+     * BLOK BARU: Fungsi Sederhana untuk Pengiriman Data
+     * ================================================
+     */
+    
+    /**
+     * Kirim data ke server dengan cara sederhana (semua dalam satu)
+     * @param serverIp Alamat IP server
+     * @param port Port server
+     * @param ssid Nama WiFi SSID
+     * @param password Password WiFi
+     * @param endpoint Endpoint/alamat API
+     * @param data Data yang akan dikirim (format: param1=value1&param2=value2)
+     */
+    //% weight=26
+    //% blockGap=8
+    //% block="kirim data ke server|IP: %serverIp|port: %port|WiFi: %ssid|password: %password|alamat: %endpoint|data: %data"
+    //% port.defl=80
+    //% endpoint.defl="/tes.php"
+    export function kirimDataServer(serverIp: string, port: number, ssid: string, password: string, endpoint: string, data: string) {
+        // Tunggu sedikit sebelum memulai
+        basic.pause(100)
+        
+        // 1. Connect ke WiFi
+        basic.showString("C")
+        connectWiFi(ssid, password)
+        basic.pause(5000)
+        
+        // 2. Cek koneksi WiFi
+        basic.showString("W")
+        if (!isWifiConnected()) {
+            basic.showIcon(IconNames.No)
+            return
+        }
+        
+        // 3. Buka koneksi TCP ke server
+        basic.showString("S")
+        if (!sendCommand("AT+CIPSTART=\"TCP\",\"" + serverIp + "\"," + port, "OK", 5000)) {
+            basic.showIcon(IconNames.No)
+            return
+        }
+        
+        // 4. Format URL dengan data
+        let fullEndpoint = endpoint
+        if (data != "") {
+            if (!endpoint.includes("?")) {
+                fullEndpoint += "?"
+            } else {
+                fullEndpoint += "&"
+            }
+            fullEndpoint += data
+        }
+        
+        // Encode URL khusus
+        fullEndpoint = formatUrl(fullEndpoint)
+        
+        // 5. Buat request HTTP GET
+        let httpRequest = "GET " + fullEndpoint + " HTTP/1.1\r\n" +
+            "Host: " + serverIp + "\r\n" +
+            "Connection: close\r\n\r\n"
+        
+        // 6. Kirim panjang data
+        basic.showString("K")
+        if (!sendCommand("AT+CIPSEND=" + httpRequest.length, ">", 3000)) {
+            basic.showIcon(IconNames.No)
+            return
+        }
+        
+        // 7. Kirim HTTP request
+        serial.writeString(httpRequest)
+        
+        // 8. Tunggu sebentar dan tutup koneksi
+        basic.pause(1000)
+        sendCommand("AT+CIPCLOSE", "OK", 1000)
+        
+        basic.showIcon(IconNames.Yes)
+    }
+    
+    /**
+     * Kirim data ke server (versi lebih sederhana, endpoint tetap)
+     * @param serverIp Alamat IP server
+     * @param ssid Nama WiFi SSID
+     * @param password Password WiFi
+     * @param data Data yang akan dikirim (format: param1=value1&param2=value2)
+     */
+    //% weight=25
+    //% blockGap=40
+    //% block="kirim data ke|IP: %serverIp|WiFi: %ssid|password: %password|data: %data"
+    //% serverIp.defl="10.155.187.242"
+    //% ssid.defl="honor"
+    //% password.defl="12345678"
+    export function kirimData(serverIp: string, ssid: string, password: string, data: string) {
+        // Gunakan fungsi utama dengan default values
+        kirimDataServer(serverIp, 80, ssid, password, "/tes.php", data)
+    }
+    
+    /**
+     * Kirim data sensor ke server (format khusus untuk sensor)
+     * @param serverIp Alamat IP server
+     * @param ssid Nama WiFi SSID
+     * @param password Password WiFi
+     * @param suhu Nilai suhu
+     * @param kelembaban Nilai kelembaban
+     * @param tekanan Nilai tekanan (opsional)
+     */
+    //% weight=24
+    //% blockGap=8
+    //% block="kirim data sensor ke|IP: %serverIp|WiFi: %ssid|password: %password|suhu: %suhu|kelembaban: %kelembaban|tekanan: %tekanan"
+    //% tekanan.defl=0
+    //% serverIp.defl="10.155.187.242"
+    //% ssid.defl="honor"
+    //% password.defl="12345678"
+    export function kirimDataSensor(serverIp: string, ssid: string, password: string, suhu: number, kelembaban: number, tekanan: number) {
+        // Format data untuk sensor
+        let data = "suhu=" + suhu + "&kelembaban=" + kelembaban
+        if (tekanan > 0) {
+            data += "&tekanan=" + tekanan
+        }
+        
+        // Kirim data menggunakan fungsi utama
+        kirimDataServer(serverIp, 80, ssid, password, "/tes.php", data)
+    }
+    
+    /**
+     * Versi original untuk backward compatibility
+     * Kirim HTTP GET dengan parameter lengkap
      * @param serverIp Server IP address
      * @param port Server port number
      * @param endpoint API endpoint path
      * @param data Data to send as query parameters
      */
-    //% weight=26
+    //% weight=23
     //% blockGap=8
-    //% blockId=esp8266_send_http_get_simple
-    //% block="send HTTP GET to %serverIp port %port endpoint %endpoint with data %data"
-    export function sendHttpGetSimple(serverIp: string, port: number, endpoint: string, data: string) {
-        // Build complete URL with data
+    //% block="HTTP GET ke %serverIp port %port endpoint %endpoint data %data"
+    //% blockHidden=false  // Tetap tampil untuk pengguna advanced
+    export function httpGet(serverIp: string, port: number, endpoint: string, data: string) {
+        // Format URL dengan data
         let fullEndpoint = endpoint
         if (data != "") {
-            // Add ? if endpoint doesn't have query parameters yet
             if (!endpoint.includes("?")) {
                 fullEndpoint += "?"
             } else {
@@ -278,27 +403,9 @@ namespace esp8266 {
         
         // Send HTTP request
         serial.writeString(httpRequest)
-    }
-    
-    /**
-     * Send data to server with one simple command
-     * @param serverIp Server IP address
-     * @param port Server port number (default: 80)
-     * @param ssid WiFi SSID
-     * @param password WiFi password
-     * @param data Data to send
-     */
-    //% weight=25
-    //% blockGap=40
-    //% blockId=esp8266_send_to_server
-    //% block="send to server|IP: %serverIp|port: %port|WiFi: %ssid|password: %password|data: %data"
-    //% port.defl=80
-    export function sendToServer(serverIp: string, port: number, ssid: string, password: string, data: string) {
-        // Connect to WiFi
-        connectWiFi(ssid, password)
-        basic.pause(5000)
         
-        // Send HTTP GET request
-        sendHttpGetSimple(serverIp, port, "/tes.php", data)
+        // Close connection
+        basic.pause(1000)
+        sendCommand("AT+CIPCLOSE", "OK", 1000)
     }
 }
