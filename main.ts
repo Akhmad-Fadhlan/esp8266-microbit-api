@@ -1,9 +1,8 @@
 /*******************************************************************************
  * MakeCode extension for ESP8266 Wifi module.
  *
- * Company: Cytron Technologies Sdn Bhd
- * Website: http://www.cytron.io
- * Email: support@cytron.io
+ * Company: IDN
+ * Email: fadhlanakhmad@idn.sch.id
  *******************************************************************************/
 
 /**
