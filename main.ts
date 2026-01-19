@@ -66,25 +66,25 @@ namespace esp8266 {
     //% blockId=esp8266_send_to_server
     //% block="send to server IP %ip WiFi %ssid Password %password File %phpFile Data %params"
     export function sendToServer(ip: string, ssid: string, password: string, phpFile: string, params: string) {
+        // Jangan reset setiap kali kirim
         if (!esp8266Initialized) {
             init(SerialPin.P16, SerialPin.P15, BaudRate.BaudRate115200)
-            basic.pause(1000)
+            connectWiFi(ssid, password)
+            basic.pause(3000)
         }
-
-        connectWiFi(ssid, password)
-        basic.pause(3000)
-
+    
         let url = phpFile
         if (params != "") url += "?" + formatUrl(params)
         let request =
             "GET /" + url + " HTTP/1.1\r\n" +
             "Host: " + ip + "\r\n" +
             "Connection: close\r\n\r\n"
-
+    
         if (!sendCommand("AT+CIPSTART=\"TCP\",\"" + ip + "\",80", "OK", 5000)) return
         if (!sendCommand("AT+CIPSEND=" + request.length, ">", 3000)) return
-
+    
         serial.writeString(request)
     }
+
 
 }
