@@ -99,7 +99,7 @@ namespace esp8266 {
         query += "&tanah=" + tanah
         
         // 4. Prepare and send HTTP GET request
-        let httpRequest = "GET /server.php?" + query + " HTTP/1.1\r\n" +
+        let httpRequest = "GET /tes.php?" + query + " HTTP/1.1\r\n" +
                          "Host: " + serverIp + "\r\n" +
                          "Connection: close\r\n\r\n"
         
