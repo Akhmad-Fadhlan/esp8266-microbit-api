@@ -2,7 +2,7 @@
 namespace esp8266 {
     let esp8266Initialized = false
     let rxData = ""
-    
+     
     /**
      * Send AT command and wait for response.
      * RETURN: String response (bukan boolean)
