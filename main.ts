@@ -118,22 +118,17 @@ namespace esp8266 {
      * Parse JSON response dari server
      */
     //% blockHidden=true
-    function parseJsonResponse(response: string): any {
-        // Cari JSON dalam response HTTP
+    function parseJsonResponse(response: string): string {
         let start = response.indexOf("{")
-        let end = response.lastIndexOf("}") + 1  // PERBAIKAN: lastIndexOf bukan lastlndexOf
-        
-        if (start >= 0 && end > start) {
-            // PERBAIKAN: gunakan substring bukan substr
-            let jsonStr = response.substr(start, end - start)
-            try {
-                return jsonStr
-            } catch (e) {
-                return response
-            }
-        }
-        return response
+        if (start < 0) return response
+    
+        let after = response.substr(start)
+        let end = after.indexOf("}")
+        if (end < 0) return response
+    
+        return after.substr(0, end + 1)
     }
+
     
     /**
      * Send HTTP GET request to server
