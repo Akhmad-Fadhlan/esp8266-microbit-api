@@ -112,7 +112,7 @@ namespace esp8266 {
         
         basic.showIcon(IconNames.Yes)
     }
-    
+     
     /**
      * Kirim data sederhana (backward compatibility)
      */
