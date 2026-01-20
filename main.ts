@@ -9,7 +9,7 @@ namespace esp8266 {
 
     let initialized = false
     let rxData = ""
-
+ 
     /**
      * Send AT Command
      */
