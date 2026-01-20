@@ -2,12 +2,13 @@
 namespace esp8266 {
     let esp8266Initialized = false
     let rxData = ""
-     
+    
     /**
      * Send AT command and wait for response.
+     * RETURN: String response (bukan boolean)
      */
     //% blockHidden=true
-    export function sendCommand(command: string, expected_response: string = null, timeout: number = 5000): string {
+    export function sendCommand(command: string, expected_response: string = null, timeout: number = 3000): string {
         basic.pause(10)
         rxData = ""
         serial.readString()
@@ -16,9 +17,8 @@ namespace esp8266 {
         
         if (expected_response == null) return ""
         
+        let result = ""
         let timestamp = input.runningTime()
-        let response = ""
-        
         while (true) {
             if (input.runningTime() - timestamp > timeout) {
                 break
@@ -26,8 +26,11 @@ namespace esp8266 {
             
             rxData += serial.readString()
             if (rxData.length > 0) {
-                // Kembalikan response lengkap
-                response = rxData
+                result = rxData
+                
+                if (expected_response == "ANY") {
+                    break  // Return whatever we got
+                }
                 
                 if (rxData.includes(expected_response)) {
                     break
@@ -39,7 +42,7 @@ namespace esp8266 {
             }
             basic.pause(10)
         }
-        return response
+        return result
     }
     
     /**
@@ -56,99 +59,142 @@ namespace esp8266 {
         
         esp8266Initialized = false
         
-        basic.pause(2000)  // Tunggu ESP8266 ready
-        
         // Reset
-        let resp = sendCommand("AT", "OK", 3000)
-        if (!resp.includes("OK")) {
-            serial.writeLine("AT failed: " + resp)
+        let resp = sendCommand("AT+RST", "ready", 5000)
+        if (!resp.includes("ready")) {
+            serial.writeLine("Reset failed: " + resp)
             return
         }
+        basic.pause(2000)
         
-        sendCommand("ATE0", "OK", 2000)  // Echo off
-        sendCommand("AT+CWMODE=1", "OK", 2000)  // Station mode
+        if (!sendCommand("ATE0", "OK", 2000).includes("OK")) return
+        if (!sendCommand("AT+CWMODE=1", "OK", 2000).includes("OK")) return
         
         esp8266Initialized = true
-        serial.writeLine("ESP8266 Initialized")
+        serial.writeLine("ESP8266 Ready")
     }
     
     /**
-     * Kirim data sensor lengkap dengan identifikasi kelompok
+     * Parse JSON response dari server
      */
-    //% weight=27
-    //% blockGap=8
-    //% block="send sensor data|Kelompok: %kelompok|Suhu: %suhu|Humidity: %hum|Cahaya: %cahaya|Tanah: %tanah|IP: %serverIp|SSID: %ssid|Password: %password"
-    //% kelompok.defl=1
+    //% blockHidden=true
+    function parseJsonResponse(response: string): any {
+        // Cari JSON dalam response HTTP
+        let start = response.indexOf("{")
+        let end = response.lastIndexOf("}") + 1
+        
+        if (start >= 0 && end > start) {
+            let jsonStr = response.substr(start, end - start)
+            try {
+                // Simple JSON parsing untuk micro:bit
+                if (jsonStr.includes("\"status\":\"OK\"")) {
+                    return {"status": "OK", "data": jsonStr}
+                }
+            } catch (e) {
+                // Jika parsing gagal, return raw
+            }
+        }
+        
+        // Jika tidak ada JSON, return original response
+        return {"status": "RAW", "data": response}
+    }
+    
+    /**
+     * SUPER SIMPLE: Send data to server in ONE BLOCK
+     * RETURN: JSON response dari server
+     */
+    //% weight=26
+    //% blockGap=40
+    //% block="send to server and get response|IP: %serverIp|WiFi: %ssid|Password: %password|Data: %data"
     //% serverIp.defl="10.155.187.242"
     //% ssid.defl="honor"
     //% password.defl="12345678"
-    export function sendSensorData(kelompok: number, suhu: number, hum: number, cahaya: number, tanah: number, serverIp: string, ssid: string, password: string) {
-        if (!esp8266Initialized) {
-            serial.writeLine("ESP8266 not initialized!")
-            return
-        }
+    export function sendToServer(serverIp: string, ssid: string, password: string, data: string): string {
+        if (!esp8266Initialized) return "ESP_NOT_INIT"
         
-        basic.showString("C")
-        serial.writeLine("Connecting to WiFi...")
+        basic.showString("W")
         
         // 1. Connect to WiFi
-        let wifiCmd = "AT+CWJAP=\"" + ssid + "\",\"" + password + "\""
-        let wifiResp = sendCommand(wifiCmd, "OK", 15000)
-        
+        let wifiResp = sendCommand("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"", "OK", 15000)
         if (!wifiResp.includes("OK")) {
-            serial.writeLine("WiFi FAILED: " + wifiResp)
-            basic.showIcon(IconNames.No)
-            return
+            return "WIFI_FAIL:" + wifiResp
         }
+        basic.pause(3000)
         
-        serial.writeLine("WiFi Connected")
         basic.showString("S")
         
         // 2. Connect to server
-        let connectCmd = "AT+CIPSTART=\"TCP\",\"" + serverIp + "\",80"
-        let connectResp = sendCommand(connectCmd, "OK", 5000)
-        
-        if (!connectResp.includes("OK")) {
-            serial.writeLine("Server connect FAILED: " + connectResp)
-            basic.showIcon(IconNames.No)
-            return
+        let connResp = sendCommand("AT+CIPSTART=\"TCP\",\"" + serverIp + "\",80", "OK", 5000)
+        if (!connResp.includes("OK")) {
+            return "CONN_FAIL:" + connResp
         }
+        basic.pause(1000)
         
-        serial.writeLine("Server Connected")
         basic.showString("D")
         
-        // 3. Prepare query string
-        let query = "kelompok=" + kelompok
-        query += "&suhu=" + suhu
-        query += "&hum=" + hum
-        query += "&cahaya=" + cahaya
-        query += "&tanah=" + tanah
+        // 3. Prepare and send HTTP GET request
+        let httpRequest = "GET /server.php?" + data + " HTTP/1.1\r\n" +
+                         "Host: " + serverIp + "\r\n" +
+                         "Connection: close\r\n\r\n"
         
-        // 4. Prepare HTTP request
-        let httpRequest = "GET /tes.php?" + query + " HTTP/1.1\r\n"
-        httpRequest += "Host: " + serverIp + "\r\n"
-        httpRequest += "Connection: close\r\n\r\n"
-        
-        serial.writeLine("Request: " + httpRequest)
-        
-        // 5. Send data
-        let sendCmd = "AT+CIPSEND=" + (httpRequest.length)
-        let sendResp = sendCommand(sendCmd, ">", 3000)
-        
-        if (sendResp.includes(">")) {
-            serial.writeString(httpRequest)
-            basic.pause(2000)
-            
-            // Baca response
-            let response = serial.readString()
-            serial.writeLine("Server Response: " + response)
-        } else {
-            serial.writeLine("Send failed: " + sendResp)
+        // Send request
+        let sendResp = sendCommand("AT+CIPSEND=" + httpRequest.length, ">", 3000)
+        if (!sendResp.includes(">")) {
+            return "SEND_FAIL:" + sendResp
         }
         
-        // 6. Close connection
+        serial.writeString(httpRequest)
+        basic.pause(2000)  // Tunggu response
+        
+        // 4. Read server response
+        let serverResponse = ""
+        let startTime = input.runningTime()
+        while (input.runningTime() - startTime < 3000) {
+            serverResponse += serial.readString()
+            if (serverResponse.includes("CLOSED") || serverResponse.includes("SEND OK")) {
+                break
+            }
+            basic.pause(100)
+        }
+        
+        // 5. Close connection
         sendCommand("AT+CIPCLOSE", "CLOSED", 2000)
         
         basic.showIcon(IconNames.Yes)
+        
+        // Parse dan return response
+        let parsed = parseJsonResponse(serverResponse)
+        return parsed["data"]
+    }
+    
+    /**
+     * Send sensor data (simple version)
+     */
+    //% weight=25
+    //% blockGap=8
+    //% block="send sensor|Suhu: %suhu|Hum: %hum|to IP: %serverIp"
+    //% serverIp.defl="10.155.187.242"
+    export function sendSensor(suhu: number, hum: number, serverIp: string) {
+        let data = "kelompok=1&suhu=" + suhu + "&hum=" + hum
+        sendToServer(serverIp, "honor", "12345678", data)
+    }
+    
+    /**
+     * Send complete sensor data with group ID
+     */
+    //% weight=24
+    //% blockGap=8
+    //% block="send complete data|Group: %kelompok|Temp: %suhu|Hum: %hum|Light: %cahaya|Soil: %tanah|to IP: %serverIp"
+    //% kelompok.defl=1
+    //% serverIp.defl="10.155.187.242"
+    export function sendCompleteData(kelompok: number, suhu: number, hum: number, cahaya: number, tanah: number, serverIp: string) {
+        let data = "kelompok=" + kelompok
+        data += "&suhu=" + suhu
+        data += "&hum=" + hum
+        data += "&cahaya=" + cahaya
+        data += "&tanah=" + tanah
+        
+        let response = sendToServer(serverIp, "honor", "12345678", data)
+        serial.writeLine("Server Response: " + response)
     }
 }
