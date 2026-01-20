@@ -1,7 +1,3 @@
-/******************************************************************************
- * MakeCode extension for ESP8266 Wifi module.
- */    
-
 //% weight=10 color=#ff8000 icon="\uf1eb" block="ESP8266 WiFi"
 namespace esp8266 {
     let esp8266Initialized = false
@@ -71,21 +67,20 @@ namespace esp8266 {
     }
     
     /**
-     * SUPER SIMPLE: Send data to server in ONE BLOCK
+     * Kirim data sensor lengkap dengan identifikasi kelompok
      */
-    //% weight=26
+    //% weight=27
     //% blockGap=40
-    //% block="send to server|IP: %serverIp|WiFi: %ssid|Password: %password|Data: %data"
+    //% block="send sensor data|Kelompok: %kelompok|Suhu: %suhu|Humidity: %hum|Cahaya: %cahaya|Tanah: %tanah|to IP: %serverIp"
+    //% kelompok.defl=1
     //% serverIp.defl="10.155.187.242"
-    //% ssid.defl="honor"
-    //% password.defl="12345678"
-    export function sendToServer(serverIp: string, ssid: string, password: string, data: string) {
+    export function sendSensorData(kelompok: number, suhu: number, hum: number, cahaya: number, tanah: number, serverIp: string) {
         if (!esp8266Initialized) return
         
         basic.showString("W")
         
         // 1. Connect to WiFi
-        sendCommand("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"", "OK", 15000)
+        sendCommand("AT+CWJAP=\"honor\",\"12345678\"", "OK", 15000)
         basic.pause(3000)
         
         basic.showString("S")
@@ -96,8 +91,15 @@ namespace esp8266 {
         
         basic.showString("D")
         
-        // 3. Prepare and send HTTP GET request
-        let httpRequest = "GET /tes.php?" + data + " HTTP/1.1\r\n" +
+        // 3. Prepare query string with all parameters
+        let query = "kelompok=" + kelompok
+        query += "&suhu=" + suhu
+        query += "&hum=" + hum
+        query += "&cahaya=" + cahaya
+        query += "&tanah=" + tanah
+        
+        // 4. Prepare and send HTTP GET request
+        let httpRequest = "GET /server.php?" + query + " HTTP/1.1\r\n" +
                          "Host: " + serverIp + "\r\n" +
                          "Connection: close\r\n\r\n"
         
@@ -105,20 +107,21 @@ namespace esp8266 {
         serial.writeString(httpRequest)
         basic.pause(1000)
         
-        // 4. Close connection
+        // 5. Close connection
         sendCommand("AT+CIPCLOSE")
         
         basic.showIcon(IconNames.Yes)
     }
     
     /**
-     * Even SIMPLER: Send sensor data
+     * Kirim data sederhana (backward compatibility)
      */
     //% weight=25
     //% blockGap=8
-    //% block="send sensor|Suhu: %suhu|to IP: %serverIp"
+    //% block="send simple data|Kelompok: %kelompok|Suhu: %suhu|Humidity: %hum|to IP: %serverIp"
+    //% kelompok.defl=1
     //% serverIp.defl="10.155.187.242"
-    export function sendSensor(suhu: number, serverIp: string) {
-        sendToServer(serverIp, "honor", "12345678", "suhu=" + suhu)
+    export function sendSimpleData(kelompok: number, suhu: number, hum: number, serverIp: string) {
+        sendSensorData(kelompok, suhu, hum, 0, 0, serverIp)
     }
 }
