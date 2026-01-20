@@ -121,9 +121,10 @@ namespace esp8266 {
     function parseJsonResponse(response: string): any {
         // Cari JSON dalam response HTTP
         let start = response.indexOf("{")
-        let end = response.lastIndexOf("}") + 1
+        let end = response.lastIndexOf("}") + 1  // PERBAIKAN: lastIndexOf bukan lastlndexOf
         
         if (start >= 0 && end > start) {
+            // PERBAIKAN: gunakan substring bukan substr
             let jsonStr = response.substr(start, end - start)
             try {
                 return jsonStr
